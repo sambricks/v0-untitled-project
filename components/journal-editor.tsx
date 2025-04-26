@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-
+import { ensureUserProfileExists } from "@/lib/db/profiles";
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -55,70 +55,66 @@ export default function JournalEditor({ entryId, initialTitle = "", initialConte
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!title.trim() || !content.trim() || loading) return
+  e.preventDefault();
+  if (!title.trim() || !content.trim() || loading) return;
 
-    setLoading(true)
-    setError(null)
-    setSuccess(false)
+  setLoading(true);
+  setError(null);
+  setSuccess(false);
 
-    try {
-      console.log(`${isEditing ? "Updating" : "Creating"} journal entry...`)
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser()
+  try {
+    console.log(`${isEditing ? "Updating" : "Creating"} journal entry...`);
+    
+    // First ensure the user profile exists
+    const userId = await ensureUserProfileExists();
 
-      if (userError) throw new Error(`Auth error: ${userError.message}`)
-      if (!user) throw new Error("Not authenticated")
-
-      if (isEditing) {
-        // Update existing entry
-        console.log("Updating journal entry:", entryId)
-        const { error: updateError, data } = await supabase
-          .from("journal_entries")
-          .update({
-            title: title.trim(),
-            content: content.trim(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", entryId)
-          .eq("user_id", user.id)
-          .select()
-
-        if (updateError) throw new Error(`Database error: ${updateError.message}`)
-        console.log("Journal entry updated successfully:", data)
-      } else {
-        // Create new entry
-        console.log("Creating new journal entry")
-        const journalEntry = {
-          user_id: user.id,
+    if (isEditing) {
+      // Update existing entry
+      console.log("Updating journal entry:", entryId);
+      const { error: updateError, data } = await supabase
+        .from("journal_entries")
+        .update({
           title: title.trim(),
           content: content.trim(),
-          prompt_used: prompt,
-        }
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", entryId)
+        .eq("user_id", userId)
+        .select();
 
-        console.log("Journal entry data:", journalEntry)
-        const { error: insertError, data } = await supabase.from("journal_entries").insert(journalEntry).select()
+      if (updateError) throw new Error(`Database error: ${updateError.message}`);
+      console.log("Journal entry updated successfully:", data);
+    } else {
+      // Create new entry
+      console.log("Creating new journal entry");
+      const journalEntry = {
+        user_id: userId,
+        title: title.trim(),
+        content: content.trim(),
+        prompt_used: prompt,
+      };
 
-        if (insertError) throw new Error(`Database error: ${insertError.message}`)
-        console.log("Journal entry created successfully:", data)
-      }
+      console.log("Journal entry data:", journalEntry);
+      const { error: insertError, data } = await supabase.from("journal_entries").insert(journalEntry).select();
 
-      setSuccess(true)
-
-      // Navigate back to journal list after a short delay
-      setTimeout(() => {
-        router.push("/journal")
-        router.refresh()
-      }, 1000)
-    } catch (error) {
-      console.error("Error saving journal entry:", error)
-      setError(`Failed to save journal entry: ${error instanceof Error ? error.message : String(error)}`)
-    } finally {
-      setLoading(false)
+      if (insertError) throw new Error(`Database error: ${insertError.message}`);
+      console.log("Journal entry created successfully:", data);
     }
+
+    setSuccess(true);
+
+    // Navigate back to journal list after a short delay
+    setTimeout(() => {
+      router.push("/journal");
+      router.refresh();
+    }, 1000);
+  } catch (error) {
+    console.error("Error saving journal entry:", error);
+    setError(`Failed to save journal entry: ${error instanceof Error ? error.message : String(error)}`);
+  } finally {
+    setLoading(false);
   }
+};
 
   return (
     <Card>

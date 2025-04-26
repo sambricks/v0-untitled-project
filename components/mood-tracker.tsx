@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-
+import { ensureUserProfileExists } from "@/lib/db/profiles";
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -36,50 +36,47 @@ export default function MoodTracker() {
 
   const currentMood = moodLabels.find((m) => m.score === moodScore)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
-    setSuccess(false)
+  
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLoading(true);
+  setError(null);
+  setSuccess(false);
 
-    try {
-      console.log("Saving mood entry...")
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser()
+  try {
+    console.log("Saving mood entry...");
+    
+    // First ensure the user profile exists
+    const userId = await ensureUserProfileExists();
+    
+    console.log("User profile checked, saving mood entry...");
+    const moodEntry = {
+      user_id: userId,
+      mood_score: moodScore,
+      mood_label: currentMood?.label || "",
+      notes: notes.trim() || null,
+    };
 
-      if (userError) throw new Error(`Auth error: ${userError.message}`)
-      if (!user) throw new Error("Not authenticated")
+    console.log("Mood entry data:", moodEntry);
+    const { error: insertError, data } = await supabase.from("mood_entries").insert(moodEntry).select();
 
-      console.log("User authenticated, saving mood entry...")
-      const moodEntry = {
-        user_id: user.id,
-        mood_score: moodScore,
-        mood_label: currentMood?.label || "",
-        notes: notes.trim() || null,
-      }
+    if (insertError) throw new Error(`Database error: ${insertError.message}`);
 
-      console.log("Mood entry data:", moodEntry)
-      const { error: insertError, data } = await supabase.from("mood_entries").insert(moodEntry).select()
+    console.log("Mood entry saved successfully:", data);
+    setNotes("");
+    setSuccess(true);
 
-      if (insertError) throw new Error(`Database error: ${insertError.message}`)
-
-      console.log("Mood entry saved successfully:", data)
-      setNotes("")
-      setSuccess(true)
-
-      // Force a refresh to update the mood chart
-      setTimeout(() => {
-        router.refresh()
-      }, 1000)
-    } catch (error) {
-      console.error("Error saving mood:", error)
-      setError(`Failed to save mood: ${error instanceof Error ? error.message : String(error)}`)
-    } finally {
-      setLoading(false)
-    }
+    // Force a refresh to update the mood chart
+    setTimeout(() => {
+      router.refresh();
+    }, 1000);
+  } catch (error) {
+    console.error("Error saving mood:", error);
+    setError(`Failed to save mood: ${error instanceof Error ? error.message : String(error)}`);
+  } finally {
+    setLoading(false);
   }
+};
 
   return (
     <Card>
