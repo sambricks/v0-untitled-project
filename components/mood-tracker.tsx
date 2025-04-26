@@ -60,7 +60,7 @@ const handleSubmit = async (e: React.FormEvent) => {
     console.log("Mood entry data:", moodEntry);
     const { error: insertError, data } = await supabase.from("mood_entries").insert(moodEntry).select();
 
-    if (insertError) throw new Error(`Database error: ${insertError.message}`);
+    if (insertError) throw insertError;
 
     console.log("Mood entry saved successfully:", data);
     setNotes("");
@@ -72,7 +72,13 @@ const handleSubmit = async (e: React.FormEvent) => {
     }, 1000);
   } catch (error) {
     console.error("Error saving mood:", error);
-    setError(`Failed to save mood: ${error instanceof Error ? error.message : String(error)}`);
+    // Properly extract the error message
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : error && typeof error === 'object' && 'message' in error 
+        ? String(error.message) 
+        : 'Unknown error occurred';
+    setError(`Failed to save mood: ${errorMessage}`);
   } finally {
     setLoading(false);
   }
